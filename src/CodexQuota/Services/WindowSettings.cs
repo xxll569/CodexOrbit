@@ -63,20 +63,46 @@ namespace CodexQuota.Services
 
         public static bool TryLoadMiniPosition(out double left, out double top)
         {
+            string dockSide;
+            bool autoHide;
+            return TryLoadMiniState(out left, out top, out dockSide, out autoHide);
+        }
+
+        public static bool TryLoadMiniState(out double left, out double top,
+            out string dockSide, out bool autoHide)
+        {
             left = 0;
             top = 0;
+            dockSide = "None";
+            autoHide = true;
             try
             {
                 if (!File.Exists(MiniPositionPath)) return false;
                 string[] values = File.ReadAllLines(MiniPositionPath);
-                return values.Length >= 2 &&
-                    double.TryParse(values[0], NumberStyles.Float, CultureInfo.InvariantCulture, out left) &&
-                    double.TryParse(values[1], NumberStyles.Float, CultureInfo.InvariantCulture, out top);
+                if (values.Length < 2 ||
+                    !double.TryParse(values[0], NumberStyles.Float, CultureInfo.InvariantCulture, out left) ||
+                    !double.TryParse(values[1], NumberStyles.Float, CultureInfo.InvariantCulture, out top))
+                    return false;
+
+                if (values.Length >= 3 && !string.IsNullOrWhiteSpace(values[2]))
+                    dockSide = values[2];
+                if (values.Length >= 4)
+                {
+                    bool parsedAutoHide;
+                    if (bool.TryParse(values[3], out parsedAutoHide))
+                        autoHide = parsedAutoHide;
+                }
+                return true;
             }
             catch { return false; }
         }
 
         public static void SaveMiniPosition(double left, double top)
+        {
+            SaveMiniState(left, top, "None", true);
+        }
+
+        public static void SaveMiniState(double left, double top, string dockSide, bool autoHide)
         {
             try
             {
@@ -84,7 +110,9 @@ namespace CodexQuota.Services
                 File.WriteAllLines(MiniPositionPath, new[]
                 {
                     left.ToString(CultureInfo.InvariantCulture),
-                    top.ToString(CultureInfo.InvariantCulture)
+                    top.ToString(CultureInfo.InvariantCulture),
+                    string.IsNullOrWhiteSpace(dockSide) ? "None" : dockSide,
+                    autoHide.ToString(CultureInfo.InvariantCulture)
                 });
             }
             catch { }

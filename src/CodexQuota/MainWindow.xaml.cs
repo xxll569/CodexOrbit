@@ -24,7 +24,6 @@ namespace CodexQuota
         private readonly DispatcherTimer _clockTimer;
         private readonly Forms.NotifyIcon _trayIcon;
         private readonly Forms.ContextMenuStrip _contextMenu;
-        private readonly Forms.ToolStripMenuItem _displayModeMenu;
         private readonly Forms.ToolStripMenuItem _topmostMenu;
         private readonly MiniStatusWindow _miniStatusWindow;
         private UsageSnapshot _snapshot;
@@ -62,9 +61,8 @@ namespace CodexQuota
             _clockTimer.Tick += ClockTimer_Tick;
 
             _contextMenu = new Forms.ContextMenuStrip();
-            _displayModeMenu = new Forms.ToolStripMenuItem("切换到 Mini 展示");
-            _displayModeMenu.Click += delegate { Dispatcher.BeginInvoke(new Action(ToggleDisplayMode)); };
-            _contextMenu.Items.Add(_displayModeMenu);
+            _miniStatusWindow = new MiniStatusWindow(
+                delegate { Dispatcher.BeginInvoke(new Action(ShowContextMenu)); });
             _contextMenu.Items.Add("重新读取", null, delegate { _reader.RequestRefresh(); });
             _topmostMenu = new Forms.ToolStripMenuItem("始终置顶") { Checked = true, CheckOnClick = true };
             _topmostMenu.CheckedChanged += delegate
@@ -72,6 +70,7 @@ namespace CodexQuota
                 Dispatcher.BeginInvoke(new Action(delegate
                 {
                     Topmost = _topmostMenu.Checked;
+                    _miniStatusWindow.Topmost = _topmostMenu.Checked;
                     SaveWindowSettings();
                 }));
             };
@@ -86,18 +85,21 @@ namespace CodexQuota
                 ContextMenuStrip = _contextMenu,
                 Visible = true
             };
-            _trayIcon.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); };
-
-            _miniStatusWindow = new MiniStatusWindow(
-                delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); },
-                delegate { Dispatcher.BeginInvoke(new Action(ShowContextMenu)); });
+            _trayIcon.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(RevealMini)); };
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             RestoreWindowSettings();
-            LayoutGauge();
-            StartEntranceAnimation();
+            bool normalStartup = string.IsNullOrWhiteSpace(_previewPath) &&
+                                 string.IsNullOrWhiteSpace(_miniPreviewPath);
+            if (normalStartup)
+                ShowMiniMode();
+            else
+            {
+                LayoutGauge();
+                StartEntranceAnimation();
+            }
             _clockTimer.Start();
             _reader.StartWatching();
 
@@ -413,36 +415,23 @@ namespace CodexQuota
             LayoutGauge();
         }
 
-        private void HideToTray()
+        private void ShowMiniMode()
         {
-            SaveWindowSettings();
             Rect workingArea;
             Rect screenBounds;
             GetCurrentScreenRects(out workingArea, out screenBounds);
             ShowInTaskbar = false;
             Hide();
+            _miniStatusWindow.Topmost = _topmostMenu.Checked;
             _miniStatusWindow.ShowNearTaskbar(workingArea, screenBounds);
-            _displayModeMenu.Text = "切换到悬浮窗";
         }
 
-        private void ShowFromTray()
+        private void RevealMini()
         {
-            _miniStatusWindow.HideStatus();
-            if (!IsVisible) Show();
-            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-            Activate();
-            Topmost = false;
-            Topmost = _topmostMenu.Checked;
-            StartEntranceAnimation();
-            _displayModeMenu.Text = "切换到 Mini 展示";
-        }
-
-        private void ToggleDisplayMode()
-        {
-            if (IsVisible)
-                HideToTray();
+            if (_miniStatusWindow.IsVisible)
+                _miniStatusWindow.Reveal();
             else
-                ShowFromTray();
+                ShowMiniMode();
         }
 
         private void RestoreWindowSettings()
@@ -466,6 +455,7 @@ namespace CodexQuota
             }
 
             Topmost = topmost;
+            _miniStatusWindow.Topmost = topmost;
             _topmostMenu.Checked = topmost;
         }
 
@@ -488,7 +478,7 @@ namespace CodexQuota
             if (!_allowClose)
             {
                 e.Cancel = true;
-                HideToTray();
+                ShowMiniMode();
             }
         }
 
