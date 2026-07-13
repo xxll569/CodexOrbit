@@ -11,6 +11,11 @@ namespace CodexQuota.Services
             "CodexQuota",
             "window-ring-v2.txt");
 
+        private static readonly string MiniPositionPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "CodexQuota",
+            "window-mini-v1.txt");
+
         public static bool TryLoad(out double left, out double top, out double width, out double height, out bool topmost)
         {
             left = 0;
@@ -51,6 +56,35 @@ namespace CodexQuota.Services
                     width.ToString(CultureInfo.InvariantCulture),
                     height.ToString(CultureInfo.InvariantCulture),
                     topmost.ToString(CultureInfo.InvariantCulture)
+                });
+            }
+            catch { }
+        }
+
+        public static bool TryLoadMiniPosition(out double left, out double top)
+        {
+            left = 0;
+            top = 0;
+            try
+            {
+                if (!File.Exists(MiniPositionPath)) return false;
+                string[] values = File.ReadAllLines(MiniPositionPath);
+                return values.Length >= 2 &&
+                    double.TryParse(values[0], NumberStyles.Float, CultureInfo.InvariantCulture, out left) &&
+                    double.TryParse(values[1], NumberStyles.Float, CultureInfo.InvariantCulture, out top);
+            }
+            catch { return false; }
+        }
+
+        public static void SaveMiniPosition(double left, double top)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(MiniPositionPath));
+                File.WriteAllLines(MiniPositionPath, new[]
+                {
+                    left.ToString(CultureInfo.InvariantCulture),
+                    top.ToString(CultureInfo.InvariantCulture)
                 });
             }
             catch { }

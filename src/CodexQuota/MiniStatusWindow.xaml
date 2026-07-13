@@ -9,7 +9,7 @@
         TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Grid x:Name="Root" Margin="4" Opacity="0" RenderTransformOrigin="0.5,0.5"
-          MouseLeftButtonUp="Root_MouseLeftButtonUp"
+          MouseLeftButtonDown="Root_MouseLeftButtonDown"
           MouseRightButtonUp="Root_MouseRightButtonUp"
           MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave"
           ToolTipService.InitialShowDelay="220" ToolTipService.ShowDuration="60000">
@@ -40,9 +40,6 @@
             <Border.Background>
                 <SolidColorBrush x:Name="ShellBackground" Color="#F20A101B" />
             </Border.Background>
-            <Border.Effect>
-                <DropShadowEffect Color="#90000000" BlurRadius="12" ShadowDepth="3" Opacity="0.72" />
-            </Border.Effect>
             <Grid VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

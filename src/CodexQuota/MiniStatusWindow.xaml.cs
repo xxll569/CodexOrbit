@@ -1,4 +1,5 @@
 using CodexQuota.Models;
+using CodexQuota.Services;
 using System;
 using System.IO;
 using System.Windows;
@@ -52,17 +53,34 @@ namespace CodexQuota
                 : Color.FromRgb(245, 182, 92));
             DetailValueText.Text = BuildDetail(shortWindow, weekWindow, shortValid, weekValid, now);
 
-            if (IsVisible && _hasPosition) PositionNearTaskbar();
         }
 
         public void ShowNearTaskbar(Rect workingArea, Rect screenBounds)
         {
             _workingArea = workingArea;
             _screenBounds = screenBounds;
-            _hasPosition = true;
-            PositionNearTaskbar();
+            if (!_hasPosition)
+            {
+                _hasPosition = true;
+                double savedLeft;
+                double savedTop;
+                if (WindowSettings.TryLoadMiniPosition(out savedLeft, out savedTop) &&
+                    IsVisiblePosition(savedLeft, savedTop))
+                {
+                    Left = savedLeft;
+                    Top = savedTop;
+                }
+                else
+                {
+                    PositionNearTaskbar();
+                }
+            }
+            else if (!IsVisiblePosition(Left, Top))
+            {
+                PositionNearTaskbar();
+            }
+
             if (!IsVisible) Show();
-            PositionNearTaskbar();
             StartEntranceAnimation();
         }
 
@@ -123,6 +141,23 @@ namespace CodexQuota
             }
         }
 
+        private bool IsVisiblePosition(double left, double top)
+        {
+            if (double.IsNaN(left) || double.IsInfinity(left) ||
+                double.IsNaN(top) || double.IsInfinity(top))
+                return false;
+
+            const double minimumVisible = 24d;
+            double virtualLeft = SystemParameters.VirtualScreenLeft;
+            double virtualTop = SystemParameters.VirtualScreenTop;
+            double virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+            double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+            return left + Width - minimumVisible >= virtualLeft &&
+                   left + minimumVisible <= virtualRight &&
+                   top + Height - minimumVisible >= virtualTop &&
+                   top + minimumVisible <= virtualBottom;
+        }
+
         private void StartEntranceAnimation()
         {
             var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
@@ -156,9 +191,31 @@ namespace CodexQuota
                     TimeSpan.FromMilliseconds(120)));
         }
 
-        private void Root_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        private void Root_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            double startLeft = Left;
+            double startTop = Top;
+
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // 鼠标按键状态在系统接管拖动前变化时，保留普通单击行为。
+            }
+
+            double movedX = Math.Abs(Left - startLeft);
+            double movedY = Math.Abs(Top - startTop);
+            bool wasDragged = movedX >= SystemParameters.MinimumHorizontalDragDistance ||
+                              movedY >= SystemParameters.MinimumVerticalDragDistance;
+            if (wasDragged)
+            {
+                WindowSettings.SaveMiniPosition(Left, Top);
+                return;
+            }
+
             if (_restoreAction != null) _restoreAction();
         }
 
