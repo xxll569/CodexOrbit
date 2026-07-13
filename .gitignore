@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+*.suo
+*.pdb
+.vs/
+dist/*.exe
+!dist/CodexOrbit.exe

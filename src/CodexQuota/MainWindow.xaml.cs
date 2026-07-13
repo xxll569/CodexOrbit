@@ -1,0 +1,509 @@
+using CodexQuota.Models;
+using CodexQuota.Services;
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using System.IO;
+using System.Windows.Interop;
+using Forms = System.Windows.Forms;
+using Drawing = System.Drawing;
+
+namespace CodexQuota
+{
+    public partial class MainWindow : Window
+    {
+        private readonly CodexUsageReader _reader;
+        private readonly DispatcherTimer _clockTimer;
+        private readonly Forms.NotifyIcon _trayIcon;
+        private readonly Forms.ToolStripMenuItem _topmostMenu;
+        private UsageSnapshot _snapshot;
+        private bool _allowClose;
+        private bool _hasLoadedPosition;
+        private readonly string _previewPath;
+        private HwndSource _windowSource;
+        private bool _maintainingAspectRatio;
+        private double _shortRingPercent;
+        private double _weekRingPercent;
+        private bool _showShortWindow;
+
+        private const int WmNcHitTest = 0x0084;
+        private const int HtLeft = 10;
+        private const int HtRight = 11;
+        private const int HtTop = 12;
+        private const int HtTopLeft = 13;
+        private const int HtTopRight = 14;
+        private const int HtBottom = 15;
+        private const int HtBottomLeft = 16;
+        private const int HtBottomRight = 17;
+        private const int HtTransparent = -1;
+
+        public MainWindow(string previewPath)
+        {
+            InitializeComponent();
+            _previewPath = previewPath;
+
+            _reader = new CodexUsageReader(CodexUsageReader.GetDefaultSessionsPath());
+            _reader.SnapshotChanged += Reader_SnapshotChanged;
+
+            _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _clockTimer.Tick += ClockTimer_Tick;
+
+            _trayIcon = new Forms.NotifyIcon
+            {
+                Text = "Codex Orbit",
+                Icon = CreateTrayIcon(),
+                Visible = true
+            };
+            _trayIcon.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); };
+
+            var menu = new Forms.ContextMenuStrip();
+            menu.Items.Add("显示悬浮窗", null, delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); });
+            menu.Items.Add("隐藏到托盘", null, delegate { Dispatcher.BeginInvoke(new Action(HideToTray)); });
+            menu.Items.Add("重新读取", null, delegate { _reader.RequestRefresh(); });
+            _topmostMenu = new Forms.ToolStripMenuItem("始终置顶") { Checked = true, CheckOnClick = true };
+            _topmostMenu.CheckedChanged += delegate
+            {
+                Dispatcher.BeginInvoke(new Action(delegate
+                {
+                    Topmost = _topmostMenu.Checked;
+                    SaveWindowSettings();
+                }));
+            };
+            menu.Items.Add(_topmostMenu);
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add("退出", null, delegate { Dispatcher.BeginInvoke(new Action(ExitApplication)); });
+            _trayIcon.ContextMenuStrip = menu;
+        }
+
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            RestoreWindowSettings();
+            LayoutGauge();
+            StartEntranceAnimation();
+            _clockTimer.Start();
+            _reader.StartWatching();
+
+            UsageSnapshot initial = await Task.Run(new Func<UsageSnapshot>(_reader.ReadLatest));
+            ApplySnapshot(initial);
+
+            if (!string.IsNullOrWhiteSpace(_previewPath))
+            {
+                await Task.Delay(450);
+                RenderPreview(_previewPath);
+                ExitApplication();
+            }
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            _windowSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            if (_windowSource != null) _windowSource.AddHook(WindowMessageHook);
+        }
+
+        private IntPtr WindowMessageHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (message != WmNcHitTest) return IntPtr.Zero;
+
+            long packed = lParam.ToInt64();
+            int screenX = unchecked((short)(packed & 0xFFFF));
+            int screenY = unchecked((short)((packed >> 16) & 0xFFFF));
+            Point point = PointFromScreen(new Point(screenX, screenY));
+            double centerX = ActualWidth / 2d;
+            double centerY = ActualHeight / 2d;
+            double dx = point.X - centerX;
+            double dy = point.Y - centerY;
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+            double radius = Math.Min(ActualWidth, ActualHeight) / 2d;
+
+            if (distance > radius + 1d)
+            {
+                handled = true;
+                return new IntPtr(HtTransparent);
+            }
+
+            double resizeBand = Math.Max(10d, Math.Min(18d, radius * 0.16d));
+            if (distance < radius - resizeBand) return IntPtr.Zero;
+
+            double angle = Math.Atan2(dy, dx) * 180d / Math.PI;
+            int hit;
+            if (angle >= -22.5 && angle < 22.5) hit = HtRight;
+            else if (angle >= 22.5 && angle < 67.5) hit = HtBottomRight;
+            else if (angle >= 67.5 && angle < 112.5) hit = HtBottom;
+            else if (angle >= 112.5 && angle < 157.5) hit = HtBottomLeft;
+            else if (angle >= 157.5 || angle < -157.5) hit = HtLeft;
+            else if (angle >= -157.5 && angle < -112.5) hit = HtTopLeft;
+            else if (angle >= -112.5 && angle < -67.5) hit = HtTop;
+            else hit = HtTopRight;
+
+            handled = true;
+            return new IntPtr(hit);
+        }
+
+        private void Reader_SnapshotChanged(object sender, UsageSnapshot snapshot)
+        {
+            Dispatcher.BeginInvoke(new Action(delegate { ApplySnapshot(snapshot); }));
+        }
+
+        private void ApplySnapshot(UsageSnapshot snapshot)
+        {
+            _snapshot = snapshot ?? new UsageSnapshot { StatusMessage = "暂无数据" };
+            UpdateGaugeValues();
+        }
+
+        private void UpdateGaugeValues()
+        {
+            DateTimeOffset now = DateTimeOffset.Now;
+            UsageWindowSnapshot shortWindow = _snapshot == null ? null : _snapshot.ShortWindow;
+            UsageWindowSnapshot weekWindow = _snapshot == null ? null : _snapshot.WeekWindow;
+            bool shortValid = shortWindow != null && !shortWindow.IsExpired(now);
+            bool weekValid = weekWindow != null && !weekWindow.IsExpired(now);
+
+            _shortRingPercent = shortValid ? shortWindow.RemainingPercent : 0d;
+            _weekRingPercent = weekValid ? weekWindow.RemainingPercent : 0d;
+            _showShortWindow = shortValid;
+            ShortPercent.Text = shortValid
+                ? "5h " + Math.Round(_shortRingPercent).ToString("0") + "%"
+                : "5h --";
+            WeekPercent.Text = weekValid
+                ? "7d " + Math.Round(_weekRingPercent).ToString("0") + "%"
+                : "7d --";
+            ShortPercent.Opacity = shortValid ? 1d : 0.52d;
+            WeekPercent.Opacity = weekValid ? 1d : 0.52d;
+            ShortPercent.Visibility = shortValid ? Visibility.Visible : Visibility.Collapsed;
+            ShortRing.Visibility = shortValid ? Visibility.Visible : Visibility.Collapsed;
+            ShortDetailRow.Visibility = shortValid ? Visibility.Visible : Visibility.Collapsed;
+
+            UsageWindowSnapshot resetWindow = shortValid ? shortWindow : (weekValid ? weekWindow : null);
+            bool resetIsShort = shortValid;
+            if (resetWindow != null)
+                ResetText.Text = FormatCountdown(resetWindow.ResetsAt - now, resetIsShort);
+            else if (shortWindow != null || weekWindow != null)
+                ResetText.Text = "额度待同步";
+            else
+                ResetText.Text = "等待数据";
+
+            UpdateDetailToolTip(now, shortWindow, weekWindow, shortValid, weekValid);
+            LayoutGauge();
+        }
+
+        private void UpdateDetailToolTip(DateTimeOffset now, UsageWindowSnapshot shortWindow,
+            UsageWindowSnapshot weekWindow, bool shortValid, bool weekValid)
+        {
+            bool hasAnyData = shortWindow != null || weekWindow != null;
+            bool hasValidData = shortValid || weekValid;
+
+            if (hasValidData)
+            {
+                SyncStatusText.Text = "同步正常";
+                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(105, 216, 178));
+            }
+            else if (hasAnyData)
+            {
+                SyncStatusText.Text = "等待新快照";
+                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(245, 182, 92));
+            }
+            else
+            {
+                SyncStatusText.Text = string.IsNullOrWhiteSpace(_snapshot.StatusMessage)
+                    ? "暂无数据"
+                    : _snapshot.StatusMessage;
+                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(245, 182, 92));
+            }
+
+            ShortDetailText.Text = FormatWindowDetail(shortWindow, shortValid, now);
+            WeekDetailText.Text = FormatWindowDetail(weekWindow, weekValid, now);
+
+            DateTimeOffset? latest = null;
+            if (shortWindow != null) latest = shortWindow.ObservedAt;
+            if (weekWindow != null && (!latest.HasValue || weekWindow.ObservedAt > latest.Value))
+                latest = weekWindow.ObservedAt;
+            LastSyncText.Text = latest.HasValue ? FormatSnapshotTime(latest.Value, now) : "--";
+        }
+
+        private static string FormatWindowDetail(UsageWindowSnapshot window, bool valid, DateTimeOffset now)
+        {
+            if (window == null) return "未检测到数据";
+            if (!valid) return "预计已重置 · 等待同步";
+            return Math.Round(window.RemainingPercent).ToString("0") + "% 剩余 · " +
+                   FormatCountdown(window.ResetsAt - now, window.WindowMinutes == CodexUsageReader.ShortWindowMinutes) + "重置";
+        }
+
+        private static string FormatSnapshotTime(DateTimeOffset observedAt, DateTimeOffset now)
+        {
+            DateTime local = observedAt.LocalDateTime;
+            return local.Date == now.LocalDateTime.Date
+                ? "今天 " + local.ToString("HH:mm:ss")
+                : local.ToString("MM-dd HH:mm:ss");
+        }
+
+        private static string FormatCountdown(TimeSpan remaining, bool isShort)
+        {
+            if (remaining <= TimeSpan.Zero) return "待同步";
+            if (!isShort && remaining.TotalDays >= 1)
+                return string.Format("{0}天{1}时后", (int)remaining.TotalDays, remaining.Hours);
+            if (remaining.TotalHours >= 1)
+                return string.Format("{0}时{1}分后", (int)remaining.TotalHours, remaining.Minutes);
+            return string.Format("{0}分{1}秒后", Math.Max(0, remaining.Minutes), Math.Max(0, remaining.Seconds));
+        }
+
+        private void LayoutGauge()
+        {
+            double size = Math.Min(ActualWidth > 0 ? ActualWidth : Width, ActualHeight > 0 ? ActualHeight : Height);
+            if (size <= 0) return;
+
+            double scale = Math.Max(0.8d, Math.Min(3d, size / 120d));
+            Point center = new Point(ActualWidth / 2d, ActualHeight / 2d);
+            double outerRadius = size * 0.40d;
+            double outerStroke = Math.Max(4.5d, 7d * scale);
+            double innerStroke = Math.Max(4d, 6d * scale);
+            double ringGap = Math.Max(1d, (outerStroke + innerStroke) / 2d - 0.75d * scale);
+            double innerRadius = outerRadius - ringGap;
+
+            ConfigureTrack(WeekTrack, center, outerRadius, outerStroke);
+            ConfigureTrack(ShortTrack, center, innerRadius, innerStroke);
+            double backdropRadius = _showShortWindow
+                ? innerRadius - innerStroke / 2d + 0.5d
+                : outerRadius - outerStroke / 2d + 0.5d;
+            ConfigureDisc(CenterBackdrop, center, Math.Max(8d, backdropRadius * 0.88d));
+            WeekRing.StrokeThickness = outerStroke;
+            ShortRing.StrokeThickness = innerStroke;
+            WeekRing.Data = CreateArcGeometry(center, outerRadius, _weekRingPercent);
+            ShortRing.Data = CreateArcGeometry(center, innerRadius, _shortRingPercent);
+
+            WeekPercent.FontSize = 16.5d * scale;
+            ShortPercent.FontSize = 14.5d * scale;
+            ResetText.FontSize = 9.5d * scale;
+        }
+
+        private static void ConfigureTrack(System.Windows.Shapes.Ellipse ellipse, Point center, double radius, double stroke)
+        {
+            ellipse.Width = radius * 2d;
+            ellipse.Height = radius * 2d;
+            ellipse.StrokeThickness = stroke;
+            Canvas.SetLeft(ellipse, center.X - radius);
+            Canvas.SetTop(ellipse, center.Y - radius);
+        }
+
+        private static void ConfigureDisc(System.Windows.Shapes.Ellipse ellipse, Point center, double radius)
+        {
+            ellipse.Width = radius * 2d;
+            ellipse.Height = radius * 2d;
+            Canvas.SetLeft(ellipse, center.X - radius);
+            Canvas.SetTop(ellipse, center.Y - radius);
+        }
+
+        private static Geometry CreateArcGeometry(Point center, double radius, double percent)
+        {
+            percent = Math.Max(0d, Math.Min(100d, percent));
+            if (percent <= 0.01d) return Geometry.Empty;
+            if (percent >= 99.99d) return new EllipseGeometry(center, radius, radius);
+
+            double startAngle = -90d;
+            double endAngle = startAngle + 360d * percent / 100d;
+            Point start = PointOnCircle(center, radius, startAngle);
+            Point end = PointOnCircle(center, radius, endAngle);
+            var figure = new PathFigure { StartPoint = start, IsClosed = false, IsFilled = false };
+            figure.Segments.Add(new ArcSegment
+            {
+                Point = end,
+                Size = new Size(radius, radius),
+                SweepDirection = SweepDirection.Clockwise,
+                IsLargeArc = percent > 50d
+            });
+            return new PathGeometry(new[] { figure });
+        }
+
+        private static Point PointOnCircle(Point center, double radius, double angleDegrees)
+        {
+            double radians = angleDegrees * Math.PI / 180d;
+            return new Point(center.X + radius * Math.Cos(radians), center.Y + radius * Math.Sin(radians));
+        }
+
+        private void ClockTimer_Tick(object sender, EventArgs e)
+        {
+            if (_snapshot == null) return;
+            UpdateGaugeValues();
+        }
+
+        private void StartEntranceAnimation()
+        {
+            Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+            RootScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty,
+                new DoubleAnimation(0.965, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = easing });
+            RootScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty,
+                new DoubleAnimation(0.965, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = easing });
+        }
+
+        private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ButtonState == MouseButtonState.Pressed)
+            {
+                try { DragMove(); }
+                catch (InvalidOperationException) { }
+            }
+        }
+
+        private void Root_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (_trayIcon.ContextMenuStrip != null)
+                _trayIcon.ContextMenuStrip.Show(Forms.Cursor.Position);
+        }
+
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_maintainingAspectRatio || !IsLoaded)
+            {
+                LayoutGauge();
+                return;
+            }
+
+            double widthChange = Math.Abs(e.NewSize.Width - e.PreviousSize.Width);
+            double heightChange = Math.Abs(e.NewSize.Height - e.PreviousSize.Height);
+            double size = widthChange >= heightChange ? e.NewSize.Width : e.NewSize.Height;
+            size = Math.Max(MinWidth, Math.Min(size, 480d));
+
+            _maintainingAspectRatio = true;
+            Width = size;
+            Height = size;
+            _maintainingAspectRatio = false;
+            LayoutGauge();
+        }
+
+        private void HideToTray()
+        {
+            SaveWindowSettings();
+            Hide();
+        }
+
+        private void ShowFromTray()
+        {
+            if (!IsVisible) Show();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
+            Topmost = false;
+            Topmost = _topmostMenu.Checked;
+            StartEntranceAnimation();
+        }
+
+        private void RestoreWindowSettings()
+        {
+            double left, top, width, height;
+            bool topmost;
+            if (WindowSettings.TryLoad(out left, out top, out width, out height, out topmost) && IsVisiblePosition(left, top))
+            {
+                double size = Math.Max(MinWidth, Math.Min(Math.Max(width, height), 480d));
+                Width = size;
+                Height = size;
+                Left = left;
+                Top = top;
+                _hasLoadedPosition = true;
+            }
+            else
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = SystemParameters.WorkArea.Right - Width - 24;
+                Top = SystemParameters.WorkArea.Bottom - Height - 24;
+            }
+
+            Topmost = topmost;
+            _topmostMenu.Checked = topmost;
+        }
+
+        private bool IsVisiblePosition(double left, double top)
+        {
+            return left + 80 >= SystemParameters.VirtualScreenLeft &&
+                   left <= SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 80 &&
+                   top + 60 >= SystemParameters.VirtualScreenTop &&
+                   top <= SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 60;
+        }
+
+        private void SaveWindowSettings()
+        {
+            if (!_hasLoadedPosition && double.IsNaN(Left)) return;
+            WindowSettings.Save(Left, Top, ActualWidth, ActualHeight, Topmost);
+        }
+
+        private void Window_Closing(object sender, CancelEventArgs e)
+        {
+            if (!_allowClose)
+            {
+                e.Cancel = true;
+                HideToTray();
+            }
+        }
+
+        private void ExitApplication()
+        {
+            _allowClose = true;
+            SaveWindowSettings();
+            _clockTimer.Stop();
+            _reader.Dispose();
+            if (_windowSource != null) _windowSource.RemoveHook(WindowMessageHook);
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+            Close();
+            Application.Current.Shutdown();
+        }
+
+        private void RenderPreview(string path)
+        {
+            Root.BeginAnimation(OpacityProperty, null);
+            RootScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            RootScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, null);
+            Root.Opacity = 1;
+            RootScale.ScaleX = 1;
+            RootScale.ScaleY = 1;
+
+            int pixelWidth = Math.Max(1, (int)Math.Ceiling(ActualWidth));
+            int pixelHeight = Math.Max(1, (int)Math.Ceiling(ActualHeight));
+            var bitmap = new RenderTargetBitmap(pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(this);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            string directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            using (var stream = File.Create(path)) encoder.Save(stream);
+        }
+
+        private static Drawing.Icon CreateTrayIcon()
+        {
+            using (var bitmap = new Drawing.Bitmap(32, 32))
+            using (var graphics = Drawing.Graphics.FromImage(bitmap))
+            using (var pen = new Drawing.Pen(Drawing.Color.FromArgb(92, 105, 255), 3.2f))
+            using (var innerPen = new Drawing.Pen(Drawing.Color.FromArgb(45, 220, 248), 2.2f))
+            {
+                graphics.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(Drawing.Color.Transparent);
+                var outer = new[]
+                {
+                    new Drawing.PointF(16, 2), new Drawing.PointF(28, 9), new Drawing.PointF(28, 23),
+                    new Drawing.PointF(16, 30), new Drawing.PointF(4, 23), new Drawing.PointF(4, 9)
+                };
+                var inner = new[]
+                {
+                    new Drawing.PointF(16, 9), new Drawing.PointF(22, 12.5f), new Drawing.PointF(22, 19.5f),
+                    new Drawing.PointF(16, 23), new Drawing.PointF(10, 19.5f), new Drawing.PointF(10, 12.5f)
+                };
+                graphics.DrawPolygon(pen, outer);
+                graphics.DrawPolygon(innerPen, inner);
+                IntPtr handle = bitmap.GetHicon();
+                try { return (Drawing.Icon)Drawing.Icon.FromHandle(handle).Clone(); }
+                finally { DestroyIcon(handle); }
+            }
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
+    }
+}

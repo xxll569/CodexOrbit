@@ -1,0 +1,118 @@
+<Window x:Class="CodexQuota.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Codex Orbit"
+        Width="110" Height="110" MinWidth="90" MinHeight="90"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanResize" ShowInTaskbar="False" Topmost="True"
+        FontFamily="{StaticResource UiFont}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="Auto"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Loaded="Window_Loaded" SizeChanged="Window_SizeChanged"
+        Closing="Window_Closing">
+    <Window.Resources>
+        <RadialGradientBrush x:Key="CircleBackground" Center="0.44,0.38" GradientOrigin="0.38,0.32" RadiusX="0.78" RadiusY="0.78">
+            <GradientStop Color="#C811192B" Offset="0" />
+            <GradientStop Color="#B8080C17" Offset="0.72" />
+            <GradientStop Color="#C0050810" Offset="1" />
+        </RadialGradientBrush>
+        <LinearGradientBrush x:Key="CircleBorder" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#C58056FF" Offset="0" />
+            <GradientStop Color="#D82DD9F5" Offset="0.32" />
+            <GradientStop Color="#9F357CFF" Offset="0.66" />
+            <GradientStop Color="#B9673CE5" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ShortGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF35DDF4" Offset="0" />
+            <GradientStop Color="#FF3478FF" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="WeekGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFE65CFA" Offset="0" />
+            <GradientStop Color="#FF7737FF" Offset="1" />
+        </LinearGradientBrush>
+    </Window.Resources>
+
+    <Grid x:Name="Root" Opacity="0" RenderTransformOrigin="0.5,0.5"
+          Background="Transparent"
+          ToolTipService.InitialShowDelay="260"
+          ToolTipService.BetweenShowDelay="80"
+          ToolTipService.ShowDuration="60000"
+          MouseLeftButtonDown="Header_MouseLeftButtonDown"
+          MouseRightButtonUp="Root_MouseRightButtonUp">
+        <Grid.ToolTip>
+            <ToolTip x:Name="DetailToolTip" Placement="Mouse" HorizontalOffset="14" VerticalOffset="10"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True">
+                <Border Background="#F20A0F1B" BorderBrush="#663E4F73" BorderThickness="1"
+                        CornerRadius="10" Padding="12,10">
+                    <StackPanel Width="226">
+                        <TextBlock Text="Codex Orbit" Foreground="#F1F5FF" FontSize="13"
+                                   FontWeight="SemiBold" />
+                        <Border Height="1" Background="#26394B69" Margin="0,8,0,7" />
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="同步状态" Foreground="#7F8CA3" FontSize="11" />
+                            <TextBlock x:Name="SyncStatusText" Grid.Column="1" Text="正在读取"
+                                       Foreground="#69D8B2" FontSize="11" TextAlignment="Right" />
+                        </Grid>
+                        <Grid x:Name="ShortDetailRow" Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="5 小时" Foreground="#34CFF3" FontSize="11" />
+                            <TextBlock x:Name="ShortDetailText" Grid.Column="1" Text="等待数据"
+                                       Foreground="#D9E7F5" FontSize="11" TextAlignment="Right" />
+                        </Grid>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="周额度" Foreground="#C55AF5" FontSize="11" />
+                            <TextBlock x:Name="WeekDetailText" Grid.Column="1" Text="等待数据"
+                                       Foreground="#D9E7F5" FontSize="11" TextAlignment="Right" />
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="最后快照" Foreground="#7F8CA3" FontSize="11" />
+                            <TextBlock x:Name="LastSyncText" Grid.Column="1" Text="--"
+                                       Foreground="#AAB5C8" FontSize="11" TextAlignment="Right" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </ToolTip>
+        </Grid.ToolTip>
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="RootScale" ScaleX="0.965" ScaleY="0.965" />
+        </Grid.RenderTransform>
+
+        <Canvas x:Name="GaugeCanvas" IsHitTestVisible="False">
+            <Ellipse x:Name="CenterBackdrop" Fill="#FF080C17" />
+            <Ellipse x:Name="ShortTrack" Stroke="Transparent" Fill="Transparent" />
+            <Ellipse x:Name="WeekTrack" Stroke="Transparent" Fill="Transparent" />
+            <Path x:Name="ShortRing" Stroke="{StaticResource ShortGradient}"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+            <Path x:Name="WeekRing" Stroke="{StaticResource WeekGradient}"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+        </Canvas>
+
+        <StackPanel x:Name="ValuePanel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    IsHitTestVisible="False">
+            <TextBlock x:Name="WeekPercent" Text="7d --" Foreground="#C55AF5"
+                       FontSize="16.5" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock x:Name="ShortPercent" Text="5h --" Foreground="#34CFF3"
+                       FontSize="14.5" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0.5,0,0" />
+            <TextBlock x:Name="ResetText" Text="等待数据" Foreground="#8B95A9"
+                       FontSize="9.5" HorizontalAlignment="Center" Margin="0,1.5,0,0"
+                       TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</Window>
