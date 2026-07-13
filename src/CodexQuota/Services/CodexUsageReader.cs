@@ -22,6 +22,7 @@ namespace CodexQuota.Services
         private readonly object _refreshGate = new object();
         private FileSystemWatcher _watcher;
         private Timer _debounceTimer;
+        private Timer _safetyRefreshTimer;
         private bool _disposed;
 
         public event EventHandler<UsageSnapshot> SnapshotChanged;
@@ -117,17 +118,23 @@ namespace CodexQuota.Services
             }
 
             _debounceTimer = new Timer(OnDebounceElapsed, null, Timeout.Infinite, Timeout.Infinite);
+            _safetyRefreshTimer = new Timer(
+                delegate { RequestRefresh(); },
+                null,
+                TimeSpan.FromSeconds(15),
+                TimeSpan.FromSeconds(15));
             _watcher = new FileSystemWatcher(_sessionsPath, "*.jsonl")
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
                 InternalBufferSize = 32768,
-                EnableRaisingEvents = true
+                EnableRaisingEvents = false
             };
             _watcher.Changed += OnFileChanged;
             _watcher.Created += OnFileChanged;
             _watcher.Renamed += OnFileRenamed;
             _watcher.Error += OnWatcherError;
+            _watcher.EnableRaisingEvents = true;
         }
 
         public void RequestRefresh()
@@ -241,8 +248,12 @@ namespace CodexQuota.Services
 
         private void OnFileChanged(object sender, FileSystemEventArgs e)
         {
-            if (e.Name != null && e.Name.StartsWith("rollout-", StringComparison.OrdinalIgnoreCase))
+            string fileName = Path.GetFileName(e.FullPath);
+            if (!string.IsNullOrEmpty(fileName) &&
+                fileName.StartsWith("rollout-", StringComparison.OrdinalIgnoreCase))
+            {
                 RequestRefresh();
+            }
         }
 
         private void OnFileRenamed(object sender, RenamedEventArgs e)
@@ -314,8 +325,10 @@ namespace CodexQuota.Services
             _disposed = true;
             if (_watcher != null) _watcher.Dispose();
             if (_debounceTimer != null) _debounceTimer.Dispose();
+            if (_safetyRefreshTimer != null) _safetyRefreshTimer.Dispose();
             _watcher = null;
             _debounceTimer = null;
+            _safetyRefreshTimer = null;
         }
     }
 }

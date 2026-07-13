@@ -2,6 +2,7 @@ using CodexQuota.Services;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace CodexQuota.Tests
 {
@@ -15,6 +16,7 @@ namespace CodexQuota.Tests
             TestSwappedWindowsStillParse();
             TestMalformedAndUnrelatedLinesAreIgnored();
             TestLatestSnapshotWinsAcrossFiles();
+            TestNestedRolloutChangeTriggersRefresh();
 
             if (_failures > 0)
             {
@@ -67,6 +69,36 @@ namespace CodexQuota.Tests
                     var snapshot = reader.ReadLatest();
                     Assert(snapshot.ShortWindow != null && snapshot.ShortWindow.UsedPercent == 10, "应采用事件时间最新的短时额度");
                     Assert(snapshot.WeekWindow != null && snapshot.WeekWindow.UsedPercent == 20, "应采用事件时间最新的周额度");
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(root, true); } catch { }
+            }
+        }
+
+        private static void TestNestedRolloutChangeTriggersRefresh()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "CodexQuotaWatcherTests-" + Guid.NewGuid().ToString("N"));
+            string nested = Path.Combine(root, "2026", "07", "13");
+            Directory.CreateDirectory(nested);
+            try
+            {
+                using (var changed = new AutoResetEvent(false))
+                using (var reader = new CodexUsageReader(root))
+                {
+                    reader.SnapshotChanged += delegate(object sender, CodexQuota.Models.UsageSnapshot snapshot)
+                    {
+                        if (snapshot.ShortWindow != null && snapshot.ShortWindow.UsedPercent == 12)
+                            changed.Set();
+                    };
+
+                    reader.StartWatching();
+                    File.WriteAllText(
+                        Path.Combine(nested, "rollout-watcher.jsonl"),
+                        Line(DateTimeOffset.UtcNow.ToString("O"), 300, 12, 1893456000, 10080, 34, 1893456000));
+
+                    Assert(changed.WaitOne(TimeSpan.FromSeconds(5)), "嵌套目录中的日志变化应触发自动刷新");
                 }
             }
             finally
