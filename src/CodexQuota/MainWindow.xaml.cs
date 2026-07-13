@@ -23,11 +23,15 @@ namespace CodexQuota
         private readonly CodexUsageReader _reader;
         private readonly DispatcherTimer _clockTimer;
         private readonly Forms.NotifyIcon _trayIcon;
+        private readonly Forms.ContextMenuStrip _contextMenu;
+        private readonly Forms.ToolStripMenuItem _displayModeMenu;
         private readonly Forms.ToolStripMenuItem _topmostMenu;
+        private readonly MiniStatusWindow _miniStatusWindow;
         private UsageSnapshot _snapshot;
         private bool _allowClose;
         private bool _hasLoadedPosition;
         private readonly string _previewPath;
+        private readonly string _miniPreviewPath;
         private HwndSource _windowSource;
         private bool _maintainingAspectRatio;
         private double _shortRingPercent;
@@ -45,10 +49,11 @@ namespace CodexQuota
         private const int HtBottomRight = 17;
         private const int HtTransparent = -1;
 
-        public MainWindow(string previewPath)
+        public MainWindow(string previewPath, string miniPreviewPath)
         {
             InitializeComponent();
             _previewPath = previewPath;
+            _miniPreviewPath = miniPreviewPath;
 
             _reader = new CodexUsageReader(CodexUsageReader.GetDefaultSessionsPath());
             _reader.SnapshotChanged += Reader_SnapshotChanged;
@@ -56,18 +61,11 @@ namespace CodexQuota
             _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _clockTimer.Tick += ClockTimer_Tick;
 
-            _trayIcon = new Forms.NotifyIcon
-            {
-                Text = "Codex Orbit",
-                Icon = CreateTrayIcon(),
-                Visible = true
-            };
-            _trayIcon.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); };
-
-            var menu = new Forms.ContextMenuStrip();
-            menu.Items.Add("显示悬浮窗", null, delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); });
-            menu.Items.Add("隐藏到托盘", null, delegate { Dispatcher.BeginInvoke(new Action(HideToTray)); });
-            menu.Items.Add("重新读取", null, delegate { _reader.RequestRefresh(); });
+            _contextMenu = new Forms.ContextMenuStrip();
+            _displayModeMenu = new Forms.ToolStripMenuItem("切换到 Mini 展示");
+            _displayModeMenu.Click += delegate { Dispatcher.BeginInvoke(new Action(ToggleDisplayMode)); };
+            _contextMenu.Items.Add(_displayModeMenu);
+            _contextMenu.Items.Add("重新读取", null, delegate { _reader.RequestRefresh(); });
             _topmostMenu = new Forms.ToolStripMenuItem("始终置顶") { Checked = true, CheckOnClick = true };
             _topmostMenu.CheckedChanged += delegate
             {
@@ -77,10 +75,22 @@ namespace CodexQuota
                     SaveWindowSettings();
                 }));
             };
-            menu.Items.Add(_topmostMenu);
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add("退出", null, delegate { Dispatcher.BeginInvoke(new Action(ExitApplication)); });
-            _trayIcon.ContextMenuStrip = menu;
+            _contextMenu.Items.Add(_topmostMenu);
+            _contextMenu.Items.Add(new Forms.ToolStripSeparator());
+            _contextMenu.Items.Add("退出", null, delegate { Dispatcher.BeginInvoke(new Action(ExitApplication)); });
+
+            _trayIcon = new Forms.NotifyIcon
+            {
+                Text = "Codex Orbit · 等待额度数据",
+                Icon = CreateTrayIcon(),
+                ContextMenuStrip = _contextMenu,
+                Visible = true
+            };
+            _trayIcon.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); };
+
+            _miniStatusWindow = new MiniStatusWindow(
+                delegate { Dispatcher.BeginInvoke(new Action(ShowFromTray)); },
+                delegate { Dispatcher.BeginInvoke(new Action(ShowContextMenu)); });
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -93,6 +103,24 @@ namespace CodexQuota
 
             UsageSnapshot initial = await Task.Run(new Func<UsageSnapshot>(_reader.ReadLatest));
             ApplySnapshot(initial);
+
+            if (!string.IsNullOrWhiteSpace(_miniPreviewPath))
+            {
+                DateTimeOffset previewNow = DateTimeOffset.Now;
+                _miniStatusWindow.UpdateStatus(
+                    new UsageWindowSnapshot { UsedPercent = 32, ResetsAt = previewNow.AddHours(2).AddMinutes(18) },
+                    new UsageWindowSnapshot { UsedPercent = 37, ResetsAt = previewNow.AddDays(6).AddHours(20) },
+                    true, true, previewNow, "预览数据");
+                Rect workingArea;
+                Rect screenBounds;
+                GetCurrentScreenRects(out workingArea, out screenBounds);
+                Hide();
+                _miniStatusWindow.ShowNearTaskbar(workingArea, screenBounds);
+                await Task.Delay(260);
+                _miniStatusWindow.RenderPreview(_miniPreviewPath);
+                ExitApplication();
+                return;
+            }
 
             if (!string.IsNullOrWhiteSpace(_previewPath))
             {
@@ -192,6 +220,7 @@ namespace CodexQuota
                 ResetText.Text = "等待数据";
 
             UpdateDetailToolTip(now, shortWindow, weekWindow, shortValid, weekValid);
+            UpdateTrayStatus(shortWindow, weekWindow, shortValid, weekValid);
             LayoutGauge();
         }
 
@@ -356,8 +385,12 @@ namespace CodexQuota
         private void Root_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            if (_trayIcon.ContextMenuStrip != null)
-                _trayIcon.ContextMenuStrip.Show(Forms.Cursor.Position);
+            ShowContextMenu();
+        }
+
+        private void ShowContextMenu()
+        {
+            _contextMenu.Show(Forms.Cursor.Position);
         }
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -383,17 +416,33 @@ namespace CodexQuota
         private void HideToTray()
         {
             SaveWindowSettings();
+            Rect workingArea;
+            Rect screenBounds;
+            GetCurrentScreenRects(out workingArea, out screenBounds);
+            ShowInTaskbar = false;
             Hide();
+            _miniStatusWindow.ShowNearTaskbar(workingArea, screenBounds);
+            _displayModeMenu.Text = "切换到悬浮窗";
         }
 
         private void ShowFromTray()
         {
+            _miniStatusWindow.HideStatus();
             if (!IsVisible) Show();
             if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
             Activate();
             Topmost = false;
             Topmost = _topmostMenu.Checked;
             StartEntranceAnimation();
+            _displayModeMenu.Text = "切换到 Mini 展示";
+        }
+
+        private void ToggleDisplayMode()
+        {
+            if (IsVisible)
+                HideToTray();
+            else
+                ShowFromTray();
         }
 
         private void RestoreWindowSettings()
@@ -450,8 +499,11 @@ namespace CodexQuota
             _clockTimer.Stop();
             _reader.Dispose();
             if (_windowSource != null) _windowSource.RemoveHook(WindowMessageHook);
+            _miniStatusWindow.Close();
             _trayIcon.Visible = false;
+            if (_trayIcon.Icon != null) _trayIcon.Icon.Dispose();
             _trayIcon.Dispose();
+            _contextMenu.Dispose();
             Close();
             Application.Current.Shutdown();
         }
@@ -476,6 +528,42 @@ namespace CodexQuota
             using (var stream = File.Create(path)) encoder.Save(stream);
         }
 
+        private void UpdateTrayStatus(UsageWindowSnapshot shortWindow, UsageWindowSnapshot weekWindow,
+            bool shortValid, bool weekValid)
+        {
+            int shortPercent = shortValid ? (int)Math.Round(shortWindow.RemainingPercent) : -1;
+            int weekPercent = weekValid ? (int)Math.Round(weekWindow.RemainingPercent) : -1;
+            DateTimeOffset now = DateTimeOffset.Now;
+
+            string shortText = shortValid ? shortPercent + "%" : "--";
+            string weekText = weekValid ? weekPercent + "%" : "--";
+            _trayIcon.Text = "Codex Orbit · 5h " + shortText + " · 7d " + weekText;
+            _miniStatusWindow.UpdateStatus(shortWindow, weekWindow, shortValid, weekValid, now,
+                _snapshot == null ? null : _snapshot.StatusMessage);
+        }
+
+        private void GetCurrentScreenRects(out Rect workingArea, out Rect screenBounds)
+        {
+            workingArea = SystemParameters.WorkArea;
+            screenBounds = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+                SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+
+            if (!IsVisible) return;
+            PresentationSource source = PresentationSource.FromVisual(this);
+            if (source == null || source.CompositionTarget == null) return;
+
+            Point screenPoint = PointToScreen(new Point(ActualWidth / 2d, ActualHeight / 2d));
+            Forms.Screen screen = Forms.Screen.FromPoint(new Drawing.Point(
+                (int)Math.Round(screenPoint.X), (int)Math.Round(screenPoint.Y)));
+            Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
+            Point workTopLeft = fromDevice.Transform(new Point(screen.WorkingArea.Left, screen.WorkingArea.Top));
+            Point workBottomRight = fromDevice.Transform(new Point(screen.WorkingArea.Right, screen.WorkingArea.Bottom));
+            Point screenTopLeft = fromDevice.Transform(new Point(screen.Bounds.Left, screen.Bounds.Top));
+            Point screenBottomRight = fromDevice.Transform(new Point(screen.Bounds.Right, screen.Bounds.Bottom));
+            workingArea = new Rect(workTopLeft, workBottomRight);
+            screenBounds = new Rect(screenTopLeft, screenBottomRight);
+        }
+
         private static Drawing.Icon CreateTrayIcon()
         {
             using (var bitmap = new Drawing.Bitmap(32, 32))
@@ -497,6 +585,7 @@ namespace CodexQuota
                 };
                 graphics.DrawPolygon(pen, outer);
                 graphics.DrawPolygon(innerPen, inner);
+
                 IntPtr handle = bitmap.GetHicon();
                 try { return (Drawing.Icon)Drawing.Icon.FromHandle(handle).Clone(); }
                 finally { DestroyIcon(handle); }

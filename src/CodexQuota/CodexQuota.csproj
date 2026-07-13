@@ -49,11 +49,18 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="MiniStatusWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="MiniStatusWindow.xaml.cs">
+      <DependentUpon>MiniStatusWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Models\UsageModels.cs" />
     <Compile Include="Services\CodexUsageReader.cs" />

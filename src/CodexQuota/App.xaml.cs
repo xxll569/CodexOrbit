@@ -13,14 +13,20 @@ namespace CodexQuota
         protected override void OnStartup(StartupEventArgs e)
         {
             string previewPath = null;
+            string miniPreviewPath = null;
             if (e.Args != null && e.Args.Length == 2 &&
                 string.Equals(e.Args[0], "--render-preview", StringComparison.OrdinalIgnoreCase))
             {
                 previewPath = e.Args[1];
             }
+            else if (e.Args != null && e.Args.Length == 2 &&
+                string.Equals(e.Args[0], "--render-mini-preview", StringComparison.OrdinalIgnoreCase))
+            {
+                miniPreviewPath = e.Args[1];
+            }
 
             bool createdNew;
-            string mutexName = previewPath == null
+            string mutexName = previewPath == null && miniPreviewPath == null
                 ? "CodexOrbit.Wpf.SingleInstance"
                 : "CodexOrbit.Wpf.Preview." + Process.GetCurrentProcess().Id;
             _singleInstance = new Mutex(true, mutexName, out createdNew);
@@ -41,7 +47,7 @@ namespace CodexQuota
             }
 
             base.OnStartup(e);
-            MainWindow = new MainWindow(previewPath);
+            MainWindow = new MainWindow(previewPath, miniPreviewPath);
             MainWindow.Show();
         }
 
