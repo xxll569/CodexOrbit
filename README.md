@@ -1,5 +1,7 @@
 # Codex Orbit
 
+[简体中文](README.md) | [English](README_EN.md)
+
 轻量 Windows 用量悬浮窗，以紧凑圆环展示 Codex 的 5 小时和周额度。
 
 ## 预览
