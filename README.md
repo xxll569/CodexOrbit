@@ -5,11 +5,7 @@
 ## 预览
 
 <p align="center">
-  <a href="image/preview-edge-handle.png"><img src="image/preview-edge-handle.png" alt="Codex Orbit 贴边把手" height="102" /></a>
-  &nbsp;&nbsp;&nbsp;
-  <a href="image/preview-week-ring.png"><img src="image/preview-week-ring.png" alt="Codex Orbit 周额度圆环" height="102" /></a>
-  &nbsp;&nbsp;&nbsp;
-  <a href="image/preview-desktop.png"><img src="image/preview-desktop.png" alt="Codex Orbit 桌面使用效果" height="240" /></a>
+  <a href="image/preview-showcase-transparent.png"><img src="image/preview-showcase-transparent.png" alt="Codex Orbit Mini 模式预览" width="600" /></a>
 </p>
 
 ## 快速开始
