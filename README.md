@@ -1,5 +1,7 @@
 # Codex Orbit
 
+[简体中文](README.md) | [English](README_EN.md)
+
 轻量 Windows 用量悬浮窗，以紧凑圆环展示 Codex 的 5 小时和周额度。
 
 ## 预览
@@ -24,6 +26,6 @@
 周额度显示在圆形仪表中；如果本地日志包含有效的 5 小时额度，左侧胶囊会自动显示额度和重置倒计时，否则只显示周额度圆环。
 
 程序仅读取 `%USERPROFILE%\.codex\sessions` 中的本地额度日志，不读取账号令牌。
-> 如果 Codex Orbit 帮到了你，欢迎留下一个 ⭐ Star，让更多开发者发现它。
+### 如果 Codex Orbit 帮到了你，欢迎留下一个 ⭐ Star，让更多开发者发现它。
 
-社区：[LINUX DO — 中文开发者社区](https://linux.do/)
+### 社区：[LINUX DO — 中文开发者社区](https://linux.do/)
