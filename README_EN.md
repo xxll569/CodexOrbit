@@ -27,6 +27,6 @@ The weekly quota appears in the circular gauge. If your local logs contain a val
 
 Codex Orbit only reads local quota logs from `%USERPROFILE%\.codex\sessions`. It does not read your account token.
 
-> If Codex Orbit helps you, consider leaving a ⭐ Star so more developers can discover it.
+### If Codex Orbit helps you, consider leaving a ⭐ Star so more developers can discover it.
 
-Community: [LINUX DO — Chinese Developer Community](https://linux.do/)
+### Community: [LINUX DO — Chinese Developer Community](https://linux.do/)
