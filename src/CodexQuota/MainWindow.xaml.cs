@@ -2,7 +2,6 @@ using CodexQuota.Models;
 using CodexQuota.Services;
 using System;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -556,33 +555,13 @@ namespace CodexQuota
 
         private static Drawing.Icon CreateTrayIcon()
         {
-            using (var bitmap = new Drawing.Bitmap(32, 32))
-            using (var graphics = Drawing.Graphics.FromImage(bitmap))
-            using (var pen = new Drawing.Pen(Drawing.Color.FromArgb(92, 105, 255), 3.2f))
-            using (var innerPen = new Drawing.Pen(Drawing.Color.FromArgb(45, 220, 248), 2.2f))
+            string executablePath = Forms.Application.ExecutablePath;
+            using (Drawing.Icon executableIcon = Drawing.Icon.ExtractAssociatedIcon(executablePath))
             {
-                graphics.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                graphics.Clear(Drawing.Color.Transparent);
-                var outer = new[]
-                {
-                    new Drawing.PointF(16, 2), new Drawing.PointF(28, 9), new Drawing.PointF(28, 23),
-                    new Drawing.PointF(16, 30), new Drawing.PointF(4, 23), new Drawing.PointF(4, 9)
-                };
-                var inner = new[]
-                {
-                    new Drawing.PointF(16, 9), new Drawing.PointF(22, 12.5f), new Drawing.PointF(22, 19.5f),
-                    new Drawing.PointF(16, 23), new Drawing.PointF(10, 19.5f), new Drawing.PointF(10, 12.5f)
-                };
-                graphics.DrawPolygon(pen, outer);
-                graphics.DrawPolygon(innerPen, inner);
-
-                IntPtr handle = bitmap.GetHicon();
-                try { return (Drawing.Icon)Drawing.Icon.FromHandle(handle).Clone(); }
-                finally { DestroyIcon(handle); }
+                if (executableIcon != null) return (Drawing.Icon)executableIcon.Clone();
             }
-        }
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern bool DestroyIcon(IntPtr handle);
+            return (Drawing.Icon)Drawing.SystemIcons.Application.Clone();
+        }
     }
 }
