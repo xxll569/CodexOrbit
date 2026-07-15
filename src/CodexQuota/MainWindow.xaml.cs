@@ -230,11 +230,15 @@ namespace CodexQuota
         {
             bool hasAnyData = shortWindow != null || weekWindow != null;
             bool hasValidData = shortValid || weekValid;
+            bool hasUnusedResetWindow = (shortValid && shortWindow.IsUnusedInCurrentWindow) ||
+                                        (weekValid && weekWindow.IsUnusedInCurrentWindow);
 
             if (hasValidData)
             {
-                SyncStatusText.Text = "同步正常";
-                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(105, 216, 178));
+                SyncStatusText.Text = hasUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常";
+                SyncStatusText.Foreground = new SolidColorBrush(hasUnusedResetWindow
+                    ? Color.FromRgb(245, 182, 92)
+                    : Color.FromRgb(105, 216, 178));
             }
             else if (hasAnyData)
             {
@@ -263,6 +267,7 @@ namespace CodexQuota
         {
             if (window == null) return "未检测到数据";
             if (!valid) return "预计已重置 · 等待同步";
+            if (window.IsUnusedInCurrentWindow) return "100% 剩余 · 新周期，使用后刷新";
             return Math.Round(window.RemainingPercent).ToString("0") + "% 剩余 · " +
                    FormatCountdown(window.ResetsAt - now, window.WindowMinutes == CodexUsageReader.ShortWindowMinutes) + "重置";
         }

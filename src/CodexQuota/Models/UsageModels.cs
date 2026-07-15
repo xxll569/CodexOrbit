@@ -15,6 +15,11 @@ namespace CodexQuota.Models
             get { return Math.Max(0d, Math.Min(100d, 100d - UsedPercent)); }
         }
 
+        public bool IsUnusedInCurrentWindow
+        {
+            get { return UsedPercent <= 0d; }
+        }
+
         public bool IsExpired(DateTimeOffset now)
         {
             return ResetsAt <= now;

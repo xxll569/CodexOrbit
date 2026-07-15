@@ -16,6 +16,7 @@ namespace CodexQuota.Tests
             TestSwappedWindowsStillParse();
             TestMalformedAndUnrelatedLinesAreIgnored();
             TestLatestSnapshotWinsAcrossFiles();
+            TestUnusedWindowIsMarkedAsNewCycle();
             TestNestedRolloutChangeTriggersRefresh();
 
             if (_failures > 0)
@@ -74,6 +75,16 @@ namespace CodexQuota.Tests
             finally
             {
                 try { Directory.Delete(root, true); } catch { }
+            }
+        }
+
+        private static void TestUnusedWindowIsMarkedAsNewCycle()
+        {
+            using (var reader = new CodexUsageReader("missing"))
+            {
+                var parsed = reader.ParseLine(Line("2026-07-15T01:06:10Z", 300, 0, 1893456000, 10080, 0, 1893456000), "fixture");
+                Assert(parsed.All(x => x.IsUnusedInCurrentWindow), "使用量为 0 的额度应标记为新周期未使用");
+                Assert(parsed.All(x => x.RemainingPercent == 100), "新周期未使用时剩余额度应为 100%");
             }
         }
 
