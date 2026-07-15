@@ -81,12 +81,16 @@ namespace CodexQuota
                 ? Math.Round(shortWindow.RemainingPercent).ToString("0") + "%"
                 : "--";
             ShortResetText.Text = shortValid
-                ? FormatCompactCountdown(shortWindow.ResetsAt - now)
+                ? (shortWindow.IsUnusedInCurrentWindow
+                    ? "新周期 · 使用后刷新"
+                    : FormatCompactCountdown(shortWindow.ResetsAt - now))
                 : "等待同步";
 
             _gaugePercent = gaugeValid ? Math.Max(0d, Math.Min(100d, gaugeWindow.RemainingPercent)) : 0d;
             GaugeValueText.Text = gaugeValid ? Math.Round(_gaugePercent).ToString("0") + "%" : "--";
-            GaugeLabelText.Text = weekValid ? "7d" : (shortValid ? "5h" : "同步");
+            GaugeLabelText.Text = gaugeValid && gaugeWindow.IsUnusedInCurrentWindow
+                ? (weekValid ? "7d·新" : "5h·新")
+                : (weekValid ? "7d" : (shortValid ? "5h" : "同步"));
             GaugeLabelText.Foreground = new SolidColorBrush(weekValid
                 ? Color.FromRgb(151, 122, 196)
                 : Color.FromRgb(104, 163, 184));
@@ -101,11 +105,12 @@ namespace CodexQuota
                 if (_dockSide != MiniDockSide.None) PositionDocked(false);
             }
 
+            bool isUnusedResetWindow = gaugeValid && gaugeWindow.IsUnusedInCurrentWindow;
             DetailStatusText.Text = shortValid || weekValid
-                ? "同步正常"
+                ? (isUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常")
                 : (string.IsNullOrWhiteSpace(statusMessage) ? "等待新快照" : statusMessage);
             DetailStatusText.Foreground = new SolidColorBrush(shortValid || weekValid
-                ? Color.FromRgb(110, 220, 185)
+                ? (isUnusedResetWindow ? Color.FromRgb(245, 182, 92) : Color.FromRgb(110, 220, 185))
                 : Color.FromRgb(245, 182, 92));
             DetailValueText.Text = BuildDetail(shortWindow, weekWindow, shortValid, weekValid, now);
         }
@@ -518,10 +523,14 @@ namespace CodexQuota
             bool shortValid, bool weekValid, DateTimeOffset now)
         {
             string shortText = shortValid
-                ? "5h " + Math.Round(shortWindow.RemainingPercent).ToString("0") + "% · " + FormatCountdown(shortWindow.ResetsAt - now)
+                ? (shortWindow.IsUnusedInCurrentWindow
+                    ? "5h 100% · 新周期，使用后刷新"
+                    : "5h " + Math.Round(shortWindow.RemainingPercent).ToString("0") + "% · " + FormatCountdown(shortWindow.ResetsAt - now))
                 : "5h 等待同步";
             string weekText = weekValid
-                ? "7d " + Math.Round(weekWindow.RemainingPercent).ToString("0") + "% · " + FormatCountdown(weekWindow.ResetsAt - now)
+                ? (weekWindow.IsUnusedInCurrentWindow
+                    ? "7d 100% · 新周期，使用后刷新"
+                    : "7d " + Math.Round(weekWindow.RemainingPercent).ToString("0") + "% · " + FormatCountdown(weekWindow.ResetsAt - now))
                 : "7d 等待同步";
             return shortText + "\n" + weekText;
         }

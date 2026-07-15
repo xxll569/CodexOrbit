@@ -2,7 +2,6 @@ using CodexQuota.Models;
 using CodexQuota.Services;
 using System;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -231,11 +230,15 @@ namespace CodexQuota
         {
             bool hasAnyData = shortWindow != null || weekWindow != null;
             bool hasValidData = shortValid || weekValid;
+            bool hasUnusedResetWindow = (shortValid && shortWindow.IsUnusedInCurrentWindow) ||
+                                        (weekValid && weekWindow.IsUnusedInCurrentWindow);
 
             if (hasValidData)
             {
-                SyncStatusText.Text = "同步正常";
-                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(105, 216, 178));
+                SyncStatusText.Text = hasUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常";
+                SyncStatusText.Foreground = new SolidColorBrush(hasUnusedResetWindow
+                    ? Color.FromRgb(245, 182, 92)
+                    : Color.FromRgb(105, 216, 178));
             }
             else if (hasAnyData)
             {
@@ -264,6 +267,7 @@ namespace CodexQuota
         {
             if (window == null) return "未检测到数据";
             if (!valid) return "预计已重置 · 等待同步";
+            if (window.IsUnusedInCurrentWindow) return "100% 剩余 · 新周期，使用后刷新";
             return Math.Round(window.RemainingPercent).ToString("0") + "% 剩余 · " +
                    FormatCountdown(window.ResetsAt - now, window.WindowMinutes == CodexUsageReader.ShortWindowMinutes) + "重置";
         }
@@ -556,33 +560,23 @@ namespace CodexQuota
 
         private static Drawing.Icon CreateTrayIcon()
         {
-            using (var bitmap = new Drawing.Bitmap(32, 32))
-            using (var graphics = Drawing.Graphics.FromImage(bitmap))
-            using (var pen = new Drawing.Pen(Drawing.Color.FromArgb(92, 105, 255), 3.2f))
-            using (var innerPen = new Drawing.Pen(Drawing.Color.FromArgb(45, 220, 248), 2.2f))
+            using (Stream stream = typeof(MainWindow).Assembly.GetManifestResourceStream(
+                "CodexQuota.Assets.tray-icon.ico"))
             {
-                graphics.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                graphics.Clear(Drawing.Color.Transparent);
-                var outer = new[]
+                if (stream != null)
                 {
-                    new Drawing.PointF(16, 2), new Drawing.PointF(28, 9), new Drawing.PointF(28, 23),
-                    new Drawing.PointF(16, 30), new Drawing.PointF(4, 23), new Drawing.PointF(4, 9)
-                };
-                var inner = new[]
-                {
-                    new Drawing.PointF(16, 9), new Drawing.PointF(22, 12.5f), new Drawing.PointF(22, 19.5f),
-                    new Drawing.PointF(16, 23), new Drawing.PointF(10, 19.5f), new Drawing.PointF(10, 12.5f)
-                };
-                graphics.DrawPolygon(pen, outer);
-                graphics.DrawPolygon(innerPen, inner);
-
-                IntPtr handle = bitmap.GetHicon();
-                try { return (Drawing.Icon)Drawing.Icon.FromHandle(handle).Clone(); }
-                finally { DestroyIcon(handle); }
+                    using (var trayIcon = new Drawing.Icon(stream))
+                        return (Drawing.Icon)trayIcon.Clone();
+                }
             }
-        }
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern bool DestroyIcon(IntPtr handle);
+            string executablePath = Forms.Application.ExecutablePath;
+            using (Drawing.Icon executableIcon = Drawing.Icon.ExtractAssociatedIcon(executablePath))
+            {
+                if (executableIcon != null) return (Drawing.Icon)executableIcon.Clone();
+            }
+
+            return (Drawing.Icon)Drawing.SystemIcons.Application.Clone();
+        }
     }
 }

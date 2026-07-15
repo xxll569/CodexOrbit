@@ -17,6 +17,7 @@ A lightweight Windows usage overlay that displays your Codex five-hour and weekl
 3. Use Codex as usual. The gauge refreshes automatically after quota snapshots are written to your local logs.
 
 - Hover over the overlay to view the sync status, reset time, and latest snapshot.
+- A newly reset 100% quota is marked as new and notes that it will refresh after the first use.
 - Drag the edge of the circular gauge to resize the overlay.
 - Codex Orbit opens directly in the Mini gauge capsule; no other display modes are available.
 - Drag the Mini overlay to reposition it. Codex Orbit remembers its last position automatically.
