@@ -555,6 +555,16 @@ namespace CodexQuota
 
         private static Drawing.Icon CreateTrayIcon()
         {
+            using (Stream stream = typeof(MainWindow).Assembly.GetManifestResourceStream(
+                "CodexQuota.Assets.tray-icon.ico"))
+            {
+                if (stream != null)
+                {
+                    using (var trayIcon = new Drawing.Icon(stream))
+                        return (Drawing.Icon)trayIcon.Clone();
+                }
+            }
+
             string executablePath = Forms.Application.ExecutablePath;
             using (Drawing.Icon executableIcon = Drawing.Icon.ExtractAssociatedIcon(executablePath))
             {
