@@ -1,0 +1,25 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        run: msbuild CodexQuota.sln /m /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Run tests
+        run: .\tests\CodexQuota.Tests\bin\Release\CodexQuota.Tests.exe

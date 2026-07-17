@@ -1,32 +1,42 @@
-# Codex Orbit
+<div align="center">
+  <img src="src/CodexQuota/Assets/app-icon.png" alt="CodexOrbit Logo" width="136" />
 
-[简体中文](README.md) | [English](README_EN.md)
+# CodexOrbit
 
-轻量 Windows 用量悬浮窗，以紧凑圆环展示 Codex 的 5 小时和周额度。
+### Windows Codex 用量实时悬浮窗 | 圆环监控 5h + 周额度
 
-## 预览
+[简体中文](README.md) · [English](README_EN.md)
 
-<p align="center">
-  <a href="image/preview-showcase-transparent.png"><img src="image/preview-showcase-transparent.png" alt="Codex Orbit Mini 模式预览" width="600" /></a>
-</p>
+[![Build](https://img.shields.io/github/actions/workflow/status/xxll569/CodexOrbit/build.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=Build)](https://github.com/xxll569/CodexOrbit/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/xxll569/CodexOrbit?style=flat-square&logo=github&label=Release)](https://github.com/xxll569/CodexOrbit/releases/latest)
+[![License](https://img.shields.io/github/license/xxll569/CodexOrbit?style=flat-square&label=License)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/xxll569/CodexOrbit/total?style=flat-square&logo=github&label=Downloads)](https://github.com/xxll569/CodexOrbit/releases)
+</div>
 
-## 快速开始
+## 演示
+
+![CodexOrbit Preview](image/social-preview.png)
+
+## Quick Start
 
 1. 从 [Releases](https://github.com/xxll569/CodexOrbit/releases/latest) 下载最新便携包。
-2. 解压后直接运行 `CodexOrbit.exe`。支持 Windows 10/11，系统通常已内置所需运行环境，无需额外安装。
-3. 正常使用 Codex，额度快照写入本地日志后圆环会自动刷新。
+2. **解压即用**：双击 `CodexOrbit.exe`，无需安装。
+3. 正常使用 Codex，悬浮窗会读取本地额度快照并自动刷新。
 
-- 鼠标悬浮：查看同步状态、重置时间和最后快照。
-- 新额度周期显示 100% 时会标记“新”，并提示首次使用后继续刷新。
-- 拖动圆周：调整悬浮窗大小。
-- 程序启动后直接显示 Mini 仪表胶囊，不再提供其他显示模式。
-- 拖动 Mini：自由调整位置，程序会自动记住最后位置。
-- 将 Mini 靠近屏幕左右边缘：自动吸附并收成细长把手，悬停即可展开。
-- 右键 Mini：重新读取、切换置顶或退出。
+支持 Windows 10/11；系统通常已内置所需的 .NET Framework 4.8 运行环境。
 
-周额度显示在圆形仪表中；如果本地日志包含有效的 5 小时额度，左侧胶囊会自动显示额度和重置倒计时，否则只显示周额度圆环。
+## 功能亮点
 
-程序仅读取 `%USERPROFILE%\.codex\sessions` 中的本地额度日志，不读取账号令牌。
-### 如果 Codex Orbit 帮到了你，欢迎留下一个 ⭐ Star，让更多开发者发现它。
+- **双额度圆环**：同时关注 5 小时额度与周额度，重置倒计时一目了然。
+- **Mini 悬浮窗**：轻量常驻桌面，支持拖动、置顶和位置记忆。
+- **边缘吸附**：靠近屏幕左右边缘时自动收成细长把手，悬停即可展开。
+- **自动刷新**：额度日志变化后自动更新，也可右键选择“重新读取”。
+- **本地优先**：仅读取 `%USERPROFILE%\.codex\sessions` 中的本地额度日志，不读取账号令牌。
 
-### 社区：[LINUX DO — 中文开发者社区](https://linux.do/)
+周额度显示在圆形仪表中；如果本地日志包含有效的 5 小时额度，左侧胶囊会自动显示额度和重置倒计时，否则只显示周额度圆环。新额度周期显示 100% 时会标记“新”，首次使用后继续刷新。
+
+## Star History
+
+如果 CodexOrbit 帮到了你，欢迎留下一个 ⭐ Star，让更多开发者发现它。
+
+社区：[LINUX DO — 中文开发者社区](https://linux.do/)
