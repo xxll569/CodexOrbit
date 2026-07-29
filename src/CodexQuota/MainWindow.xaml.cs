@@ -230,10 +230,20 @@ namespace CodexQuota
         {
             bool hasAnyData = shortWindow != null || weekWindow != null;
             bool hasValidData = shortValid || weekValid;
+            bool isShowingStaleData = _snapshot != null &&
+                string.Equals(
+                    _snapshot.StatusMessage,
+                    CodexUsageReader.StaleDataStatusMessage,
+                    StringComparison.Ordinal);
             bool hasUnusedResetWindow = (shortValid && shortWindow.IsUnusedInCurrentWindow) ||
                                         (weekValid && weekWindow.IsUnusedInCurrentWindow);
 
-            if (hasValidData)
+            if (hasValidData && isShowingStaleData)
+            {
+                SyncStatusText.Text = CodexUsageReader.StaleDataStatusMessage;
+                SyncStatusText.Foreground = new SolidColorBrush(Color.FromRgb(245, 182, 92));
+            }
+            else if (hasValidData)
             {
                 SyncStatusText.Text = hasUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常";
                 SyncStatusText.Foreground = new SolidColorBrush(hasUnusedResetWindow

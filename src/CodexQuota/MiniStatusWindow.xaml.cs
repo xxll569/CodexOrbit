@@ -105,13 +105,21 @@ namespace CodexQuota
                 if (_dockSide != MiniDockSide.None) PositionDocked(false);
             }
 
-            bool isUnusedResetWindow = gaugeValid && gaugeWindow.IsUnusedInCurrentWindow;
-            DetailStatusText.Text = shortValid || weekValid
-                ? (isUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常")
-                : (string.IsNullOrWhiteSpace(statusMessage) ? "等待新快照" : statusMessage);
-            DetailStatusText.Foreground = new SolidColorBrush(shortValid || weekValid
-                ? (isUnusedResetWindow ? Color.FromRgb(245, 182, 92) : Color.FromRgb(110, 220, 185))
-                : Color.FromRgb(245, 182, 92));
+              bool isUnusedResetWindow = gaugeValid && gaugeWindow.IsUnusedInCurrentWindow;
+              bool isShowingStaleData = string.Equals(
+                  statusMessage,
+                  CodexUsageReader.StaleDataStatusMessage,
+                  StringComparison.Ordinal);
+              DetailStatusText.Text = shortValid || weekValid
+                  ? (isShowingStaleData
+                      ? CodexUsageReader.StaleDataStatusMessage
+                      : (isUnusedResetWindow ? "额度已重置 · 使用后刷新" : "同步正常"))
+                  : (string.IsNullOrWhiteSpace(statusMessage) ? "等待新快照" : statusMessage);
+              DetailStatusText.Foreground = new SolidColorBrush(shortValid || weekValid
+                  ? (isUnusedResetWindow || isShowingStaleData
+                      ? Color.FromRgb(245, 182, 92)
+                      : Color.FromRgb(110, 220, 185))
+                  : Color.FromRgb(245, 182, 92));
             DetailValueText.Text = BuildDetail(shortWindow, weekWindow, shortValid, weekValid, now);
         }
 

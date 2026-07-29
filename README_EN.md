@@ -14,7 +14,7 @@ A lightweight Windows usage overlay that displays your Codex five-hour and weekl
 
 1. Download the latest portable package from [Releases](https://github.com/xxll569/CodexOrbit/releases/latest).
 2. Extract the package and run `CodexOrbit.exe`. Codex Orbit supports Windows 10 and 11, and the required runtime is usually already included with Windows, so no additional installation is needed.
-3. Use Codex as usual. The gauge refreshes automatically after quota snapshots are written to your local logs.
+3. Sign in to the Codex desktop app first. Codex Orbit reuses the shared sign-in state to read account usage and refreshes automatically.
 
 - Hover over the overlay to view the sync status, reset time, and latest snapshot.
 - A newly reset 100% quota is marked as new and notes that it will refresh after the first use.
@@ -26,7 +26,7 @@ A lightweight Windows usage overlay that displays your Codex five-hour and weekl
 
 The weekly quota appears in the circular gauge. If your local logs contain a valid five-hour quota, the capsule on the left also displays the quota and reset countdown; otherwise, only the weekly quota gauge is shown.
 
-Codex Orbit only reads local quota logs from `%USERPROFILE%\.codex\sessions`. It does not read your account token.
+Codex Orbit reads the shared Codex sign-in state from `%CODEX_HOME%\auth.json` or `%USERPROFILE%\.codex\auth.json` and calls the usage endpoint directly, so a separate Codex CLI installation is not required. Tokens are held in memory only for the request: Codex Orbit does not copy, refresh, modify, or log them.
 
 ### If Codex Orbit helps you, consider leaving a ⭐ Star so more developers can discover it.
 
