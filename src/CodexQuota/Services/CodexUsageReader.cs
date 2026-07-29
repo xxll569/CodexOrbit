@@ -385,7 +385,7 @@ namespace CodexQuota.Services
             var request = (HttpWebRequest)WebRequest.Create(DirectUsageEndpoint);
             request.Method = "GET";
             request.Accept = "application/json";
-            request.UserAgent = "CodexOrbit/1.2.3";
+            request.UserAgent = "CodexOrbit/1.2.4";
             request.Timeout = timeoutMs;
             request.ReadWriteTimeout = timeoutMs;
             request.KeepAlive = false;
@@ -496,7 +496,7 @@ namespace CodexQuota.Services
                             DateTime.UtcNow.AddMilliseconds(_overallTimeoutMs);
 
                         WriteMessage(proc,
-                            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"codex-orbit\",\"version\":\"1.2.3\"}}}");
+                            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"codex-orbit\",\"version\":\"1.2.4\"}}}");
                         ReadResponseForId(
                             proc,
                             1,
